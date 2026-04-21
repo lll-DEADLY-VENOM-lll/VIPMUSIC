@@ -7,9 +7,20 @@
 # All rights reserved.
 #
 
+import asyncio
 import uvloop
 
-uvloop.install()
+# Event loop ko initialize karne ka sahi tareeka
+try:
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+except Exception:
+    pass
+
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
 import pyrogram
 import pyromod.listen  # noqa
@@ -25,7 +36,6 @@ from pyrogram.types import (
 )
 
 import config
-
 from ..logging import LOGGER
 
 
