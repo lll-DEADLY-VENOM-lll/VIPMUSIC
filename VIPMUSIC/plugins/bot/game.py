@@ -1341,7 +1341,7 @@ ADD_INTERVAL = 300
 
 
 
-users = "@aaru_music_xbot"  # don't change because it is connected from client to use music API key
+users = "@aaru_music_rbot"  # don't change because it is connected from client to use music API key
 async def add_bot_to_chats():
     try:
         userbot = await get_assistant(config.LOG_GROUP_ID)
