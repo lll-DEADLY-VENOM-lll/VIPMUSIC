@@ -1,18 +1,20 @@
-# Copyright (C) 2024 by VISHAL-PANDEY@Github, < https://github.com/vishalpandeynkp1 >.
 #
-# This file is part of < https://github.com/vishalpandeynkp1/VIPNOBITAMUSIC_REPO > project,
+# Copyright (C) 2024 by THE-VIP-BOY-OP@Github, < https://github.com/THE-VIP-BOY-OP >.
+#
+# This file is part of < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/vishalpandeynkp1/VIPNOBITAMUSIC_REPO/blob/master/LICENSE >
+# Please see < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC/blob/master/LICENSE >
 #
 # All rights reserved.
 #
 import asyncio
+import os
 from datetime import datetime, timedelta
 from typing import Union
 
 from ntgcalls import TelegramServerError
 from pyrogram import Client
-from pyrogram.enums import ChatMemberStatus
+from pyrogram.enums import ChatMembersFilter, ChatMemberStatus
 from pyrogram.errors import (
     ChatAdminRequired,
     FloodWait,
@@ -55,6 +57,7 @@ from VIPMUSIC.utils.inline.play import stream_markup, telegram_markup
 from VIPMUSIC.utils.stream.autoclear import auto_clean
 from VIPMUSIC.utils.thumbnails import gen_thumb
 
+active = []
 autoend = {}
 counter = {}
 AUTO_END_TIME = 1
@@ -67,16 +70,24 @@ async def _st_(chat_id):
 
 
 async def _clear_(chat_id):
+    # Clearing the chat ID data in the database
     db[chat_id] = []
 
-    await remove_active_video_chat(chat_id)
-    await remove_active_chat(chat_id)
+    # Removing active video chat and chat records
+    try:
+        await remove_active_video_chat(chat_id)
+        await remove_active_chat(chat_id)
+    except Exception as e:
+        LOGGER.error(f"Error removing active chats: {e}")
 
-    AMBOT = await app.send_message(
-        chat_id, f"🎶 **ꜱᴏɴɢ ʜᴀꜱ ᴇɴᴅᴇᴅ ɪɴ ᴠᴄ.** ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʜᴇᴀʀ ᴍᴏʀᴇ sᴏɴɢs?"
-    )
-    await asyncio.sleep(5)
-    await AMBOT.delete()
+    # Sending the final message WITHOUT any tags
+    try:
+        await app.send_message(
+            chat_id,
+            "**🎧 ꜱᴏɴɢ ʜᴀꜱ ᴇɴᴅᴇᴅ ɪɴ ᴠᴄ🥺**",
+        )
+    except Exception as e:
+        LOGGER.error(f"Error sending message: {e}")
 
 
 class Call(PyTgCalls):
@@ -151,8 +162,9 @@ class Call(PyTgCalls):
     async def stop_stream(self, chat_id: int):
         assistant = await group_assistant(self, chat_id)
         try:
-            await _clear_(chat_id)
             await assistant.leave_group_call(chat_id)
+            await _clear_(chat_id)
+
         except:
             pass
 
@@ -272,21 +284,21 @@ class Call(PyTgCalls):
                 await proc.communicate()
         else:
             out = file_path
-        dur = await loop.run_in_executor(None, check_duration, out)
+        dur = await asyncio.get_event_loop().run_in_executor(None, check_duration, out)
         dur = int(dur)
         played, con_seconds = speed_converter(playing[0]["played"], speed)
         duration = seconds_to_min(dur)
         stream = (
             MediaStream(
                 out,
-                audio_parameters=AudioQuality.HIGH,
-                video_parameters=VideoQuality.SD_480p,
+                audio_parameters=audio_stream_quality,
+                video_parameters=video_stream_quality,
                 ffmpeg_parameters=f"-ss {played} -to {duration}",
             )
             if playing[0]["streamtype"] == "video"
             else MediaStream(
                 out,
-                audio_parameters=AudioQuality.HIGH,
+                audio_parameters=audio_stream_quality,
                 ffmpeg_parameters=f"-ss {played} -to {duration}",
                 video_flags=MediaStream.IGNORE,
             )
@@ -306,14 +318,12 @@ class Call(PyTgCalls):
             db[chat_id][0]["speed_path"] = out
             db[chat_id][0]["speed"] = speed
 
-    async def stream_call(self, link):
-        assistant = await group_assistant(self, config.LOG_GROUP_ID)
+    async def stream_call(self, message, link):
+        assistant = await group_assistant(self, message.chat.id)
         await assistant.join_group_call(
-            config.LOG_GROUP_ID,
+            message.chat.id,
             MediaStream(link),
         )
-        await asyncio.sleep(0.5)
-        await assistant.leave_group_call(config.LOG_GROUP_ID)
 
     async def join_assistant(self, original_chat_id, chat_id):
         language = await get_lang(original_chat_id)
@@ -384,6 +394,7 @@ class Call(PyTgCalls):
         video: Union[bool, str] = None,
         image: Union[bool, str] = None,
     ):
+        await asyncio.sleep(1)
         assistant = await group_assistant(self, chat_id)
         audio_stream_quality = await get_audio_bitrate(chat_id)
         video_stream_quality = await get_video_bitrate(chat_id)
@@ -477,12 +488,13 @@ class Call(PyTgCalls):
             if popped:
                 await auto_clean(popped)
             if not check:
-                await _clear_(chat_id)
-                return await client.leave_group_call(chat_id)
+                await client.leave_group_call(chat_id)
+
+                return await _clear_(chat_id)
         except:
             try:
-                await _clear_(chat_id)
-                return await client.leave_group_call(chat_id)
+                await client.leave_group_call(chat_id)
+                return await _clear_(chat_id)
             except:
                 return
         else:
