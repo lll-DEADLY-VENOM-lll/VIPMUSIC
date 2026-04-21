@@ -24,8 +24,8 @@ from VIPMUSIC.utils.inline.help import private_help_panel
 ### Command
 HELP_COMMAND = get_command("HELP_COMMAND")
 
-COLUMN_SIZE = 4  # number of  button height
-NUM_COLUMNS = 3  # number of button width
+COLUMN_SIZE = 4  # number of buttons height
+NUM_COLUMNS = 3  # number of buttons width
 
 
 class EqInlineKeyboardButton(InlineKeyboardButton):
@@ -50,7 +50,8 @@ def paginate_modules(page_n, module_dict, prefix, chat=None, close: bool = False
                     ),
                 )
                 for x in module_dict.values()
-            ]
+            ],
+            key=lambda x: x.text.lower(), # Yeh line A to Z sort karegi
         )
     else:
         modules = sorted(
@@ -62,7 +63,8 @@ def paginate_modules(page_n, module_dict, prefix, chat=None, close: bool = False
                     ),
                 )
                 for x in module_dict.values()
-            ]
+            ],
+            key=lambda x: x.text.lower(), # Yeh line A to Z sort karegi
         )
 
     pairs = [modules[i : i + NUM_COLUMNS] for i in range(0, len(modules), NUM_COLUMNS)]
@@ -200,10 +202,12 @@ async def help_button(client, query):
         )
 
     elif home_match:
+        # Note: home_text_pm and out variables should be defined in your config/strings
+        # If not defined, this part might need adjustment
         await app.send_message(
             query.from_user.id,
-            text=home_text_pm,
-            reply_markup=InlineKeyboardMarkup(out),
+            text=_["help_1"], 
+            reply_markup=InlineKeyboardMarkup(paginate_modules(0, HELPABLE, "help")),
         )
         await query.message.delete()
 
