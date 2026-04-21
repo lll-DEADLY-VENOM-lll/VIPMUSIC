@@ -1,8 +1,6 @@
 import asyncio
 import os
-import time
-from time import time
-
+import time  # Keep only this import
 import wget
 from pyrogram import filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -23,7 +21,7 @@ BANNED_USERS = []
 @app.on_callback_query(filters.regex("downloadvideo") & ~filters.user(BANNED_USERS))
 async def download_video(client, CallbackQuery):
     user_id = CallbackQuery.from_user.id
-    current_time = time.time()
+    current_time = time.time()  # This will now work correctly
 
     last_Query_time = user_last_CallbackQuery_time.get(user_id, 0)
     if current_time - last_Query_time < SPAM_WINDOW_SECONDS:
@@ -103,7 +101,7 @@ async def download_video(client, CallbackQuery):
 @app.on_callback_query(filters.regex("downloadaudio") & ~filters.user(BANNED_USERS))
 async def download_audio(client, CallbackQuery):
     user_id = CallbackQuery.from_user.id
-    current_time = time.time()
+    current_time = time.time() # This will now work correctly
 
     last_Query_time = user_last_CallbackQuery_time.get(user_id, 0)
     if current_time - last_Query_time < SPAM_AUDIO_WINDOW_SECONDS:
