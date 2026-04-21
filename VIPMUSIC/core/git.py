@@ -1,25 +1,17 @@
-# Copyright (C) 2024 by VISHAL-PANDEY@Github, < https://github.com/vishalpandeynkp1 >.
-#
-# This file is part of < https://github.com/vishalpandeynkp1/VIPNOBITAMUSIC_REPO > project,
-# and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/vishalpandeynkp1/VIPNOBITAMUSIC_REPO/blob/master/LICENSE >
-#
-# All rights reserved.
-#
-
 import asyncio
 import shlex
 from typing import Tuple
-
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError
-
 import config
-
 from ..logging import LOGGER
 
-loop = asyncio.get_event_loop_policy().get_event_loop()
-
+# --- Loop Error Fix ---
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
 def install_req(cmd: str) -> Tuple[str, str, int, int]:
     async def install_requirements():
@@ -36,9 +28,7 @@ def install_req(cmd: str) -> Tuple[str, str, int, int]:
             process.returncode,
             process.pid,
         )
-
     return loop.run_until_complete(install_requirements())
-
 
 def git():
     REPO_LINK = config.UPSTREAM_REPO
@@ -48,37 +38,42 @@ def git():
         UPSTREAM_REPO = f"https://{GIT_USERNAME}:{config.GIT_TOKEN}@{TEMP_REPO}"
     else:
         UPSTREAM_REPO = config.UPSTREAM_REPO
+
     try:
         repo = Repo()
-        LOGGER(__name__).info(f"Git Client Found [VPS DEPLOYER]")
-    except GitCommandError:
-        LOGGER(__name__).info(f"Invalid Git Command")
-    except InvalidGitRepositoryError:
+        LOGGER(__name__).info(f"Git Client Found.")
+    except (InvalidGitRepositoryError, GitCommandError):
         repo = Repo.init()
         if "origin" in repo.remotes:
             origin = repo.remote("origin")
         else:
             origin = repo.create_remote("origin", UPSTREAM_REPO)
         origin.fetch()
-        repo.create_head(
-            config.UPSTREAM_BRANCH,
-            origin.refs[config.UPSTREAM_BRANCH],
-        )
-        repo.heads[config.UPSTREAM_BRANCH].set_tracking_branch(
-            origin.refs[config.UPSTREAM_BRANCH]
-        )
-        repo.heads[config.UPSTREAM_BRANCH].checkout(True)
-
+        
+        # ऑटोमैटिक ब्रांच डिटेक्शन
         try:
-            repo.create_remote("origin", config.UPSTREAM_REPO)
-        except BaseException:
-            pass
+            BRANCH = config.UPSTREAM_BRANCH
+            repo.create_head(BRANCH, origin.refs[BRANCH])
+        except:
+            # अगर config वाली ब्रांच नहीं मिली, तो जो भी पहली ब्रांच मिले उसे पकड़ लो
+            BRANCH = origin.refs[0].remote_head
+            repo.create_head(BRANCH, origin.refs[BRANCH])
+            
+        repo.heads[BRANCH].set_tracking_branch(origin.refs[BRANCH])
+        repo.heads[BRANCH].checkout(True)
 
-    nrs = repo.remote("origin")
-    nrs.fetch(config.UPSTREAM_BRANCH)
     try:
-        nrs.pull(config.UPSTREAM_BRANCH)
-    except GitCommandError:
-        repo.git.reset("--hard", "FETCH_HEAD")
+        nrs = repo.remote("origin")
+    except:
+        nrs = repo.create_remote("origin", UPSTREAM_REPO)
+
+    try:
+        # यहाँ हम चेक कर रहे हैं कि रिमोट पर कौन सी ब्रांच है
+        nrs.fetch()
+        active_branch = repo.active_branch.name
+        nrs.pull(active_branch)
+        LOGGER(__name__).info(f"Successfully updated from branch: {active_branch}")
+    except Exception as e:
+        LOGGER(__name__).error(f"Update skipped due to: {e}")
+
     install_req("pip3 install --no-cache-dir -r requirements.txt")
-    LOGGER(__name__).info(f"Fetched Updates from: {REPO_LINK}")
