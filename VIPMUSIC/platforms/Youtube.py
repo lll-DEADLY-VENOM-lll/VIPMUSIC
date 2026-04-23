@@ -17,6 +17,13 @@ try:
 except ImportError:
     LOGGER.error("Config file not found!")
 
+# --- JBL SOUND EFFECT CONFIG ---
+# Yeh filters FFmpeg ke liye hain jo "JBL Signature Sound" mimic karte hain (Deep Bass + Sharp Treble)
+JBL_FFMPEG_FILTERS = (
+    "-af \"bass=g=12,treble=g=5,equalizer=f=40:width_type=h:width=50:g=10,"
+    "equalizer=f=110:width_type=h:width=100:g=7,loudnorm\""
+)
+
 # --- SECURITY FILTER ---
 class SensitiveDataFilter(logging.Filter):
     def filter(self, record):
@@ -33,7 +40,6 @@ API_URL = "http://kiru-bot.up.railway.app"
 
 # --- UTILS ---
 def get_clean_id(link: str) -> Optional[str]:
-    """Extracts and sanitizes YouTube Video ID"""
     if "v=" in link:
         video_id = link.split('v=')[-1].split('&')[0]
     elif "youtu.be/" in link:
@@ -44,11 +50,9 @@ def get_clean_id(link: str) -> Optional[str]:
     return clean_id if 5 <= len(clean_id) <= 15 else None
 
 async def get_direct_stream_link(link: str, media_type: str) -> Optional[str]:
-    """Generates direct streamable URL via API"""
     video_id = get_clean_id(link)
     if not video_id:
         return None
-
     try:
         timeout = aiohttp.ClientTimeout(total=15) 
         async with aiohttp.ClientSession(headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout) as session:
@@ -59,7 +63,7 @@ async def get_direct_stream_link(link: str, media_type: str) -> Optional[str]:
                     if token:
                         return f"{API_URL}/stream/{video_id}?type={media_type}&token={token}"
     except Exception:
-        pass # Fallback to yt-dlp will handle this
+        pass
     return None
 
 class YouTubeAPI:
@@ -73,24 +77,20 @@ class YouTubeAPI:
         return bool(re.search(self.regex, link))
 
     async def url(self, message: Message) -> Optional[str]:
-        """Extracts URL from message or replied message"""
         messages = [message, message.reply_to_message]
         for msg in messages:
             if not msg: continue
             text = msg.text or msg.caption
             if not text: continue
-
             if msg.entities:
                 for entity in msg.entities:
                     if entity.type == MessageEntityType.URL:
                         return text[entity.offset : entity.offset + entity.length]
-            
             urls = re.findall(r'(https?://\S+)', text)
             if urls: return urls[0]
         return None
 
     async def search(self, query: str, limit: int = 1):
-        """Search videos using youtubesearchpython"""
         try:
             search = VideosSearch(query, limit=limit)
             resp = await search.next()
@@ -102,7 +102,6 @@ class YouTubeAPI:
     async def details(self, link: str, videoid: Union[bool, str] = None):
         if videoid: link = self.base + link
         try:
-            # Check if it's a direct URL or a search query
             if not await self.exists(link):
                 res = await self.search(link, limit=1)
             else:
@@ -144,16 +143,16 @@ class YouTubeAPI:
         videoid: Union[bool, str] = None,
         **kwargs
     ) -> Tuple[Optional[str], bool]:
-        """Returns streamable URL. Fixes GroupcallInvalid by ensuring a valid link."""
+        """Returns streamable URL with high quality audio settings."""
         if videoid: link = self.base + link
         m_type = "video" if video else "audio"
         
-        # 1. Pehle API se try karein (Fastest)
+        # 1. API Try
         stream_link = await get_direct_stream_link(link, m_type)
         if stream_link:
             return stream_link, True
         
-        # 2. Fallback: yt-dlp (Strongest) - Isse GroupcallInvalid solve ho jayega
+        # 2. Fallback: yt-dlp with JBL Tuning (High Bitrate)
         try:
             ydl_opts = {
                 "format": "bestaudio/best" if not video else "bestvideo+bestaudio/best",
@@ -161,6 +160,13 @@ class YouTubeAPI:
                 "no_warnings": True,
                 "geo_bypass": True,
                 "nocheckcertificate": True,
+                "outtmpl": "downloads/%(id)s.%(ext)s",
+                # JBL Quality Enhancements
+                "postprocessor_args": [
+                    "-threads", "4",
+                    "-af", "loudnorm" # Normalizes volume for punchy sound
+                ],
+                "extract_flat": False,
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, link, download=False)
