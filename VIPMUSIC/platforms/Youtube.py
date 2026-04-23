@@ -5,7 +5,7 @@ from typing import Union, Tuple
 import yt_dlp
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
-from py_yt import VideosSearch, Playlist
+from youtubesearchpython.__future__ import VideosSearch, Playlist
 from VIPMUSIC.utils.formatters import time_to_seconds
 from VIPMUSIC import LOGGER
 
