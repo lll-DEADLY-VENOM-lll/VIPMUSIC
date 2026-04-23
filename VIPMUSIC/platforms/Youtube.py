@@ -6,8 +6,8 @@ import yt_dlp
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
 from py_yt import VideosSearch, Playlist
-from ShrutiMusic.utils.formatters import time_to_seconds
-from ShrutiMusic import LOGGER
+from VIPMUSIC.utils.formatters import time_to_seconds
+from VIPMUSIC import LOGGER
 
 # External API Configuration
 API_URL = "https://kiru-bot.up.railway.app"
