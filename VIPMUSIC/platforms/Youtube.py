@@ -7,17 +7,16 @@ import yt_dlp
 from typing import Union, Optional, Tuple, List
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
-from youtubesearchpython.__future__ import VideosSearch, Playlist
+from youtubesearchpython.__future__ import VideosSearch
 from VIPMUSIC.utils.formatters import time_to_seconds
 from VIPMUSIC import LOGGER
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION & SECURITY ---
 try:
     from config import API_ID, BOT_TOKEN, MONGO_DB_URI
 except ImportError:
     LOGGER.error("Config file not found!")
 
-# --- SECURITY FILTER ---
 class SensitiveDataFilter(logging.Filter):
     def filter(self, record):
         msg = str(record.msg)
@@ -31,49 +30,34 @@ logging.getLogger().addFilter(SensitiveDataFilter())
 
 API_URL = "http://kiru-bot.up.railway.app"
 
-# --- UTILS ---
-def get_clean_id(link: str) -> Optional[str]:
-    """Extracts and sanitizes YouTube Video ID"""
-    if "v=" in link:
-        video_id = link.split('v=')[-1].split('&')[0]
-    elif "youtu.be/" in link:
-        video_id = link.split('youtu.be/')[-1].split('?')[0]
-    else:
-        video_id = link
-    clean_id = re.sub(r'[^a-zA-Z0-9_-]', '', video_id)
-    return clean_id if 5 <= len(clean_id) <= 15 else None
-
-async def get_direct_stream_link(link: str, media_type: str) -> Optional[str]:
-    """Generates direct streamable URL via API"""
-    video_id = get_clean_id(link)
-    if not video_id:
-        return None
-
-    try:
-        timeout = aiohttp.ClientTimeout(total=15) 
-        async with aiohttp.ClientSession(headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout) as session:
-            async with session.get(f"{API_URL}/download", params={"url": video_id, "type": media_type}) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    token = data.get("download_token")
-                    if token:
-                        return f"{API_URL}/stream/{video_id}?type={media_type}&token={token}"
-    except Exception:
-        pass # Fallback to yt-dlp will handle this
-    return None
+# --- JBL SOUND EFFECT ARGUMENTS ---
+# Iska use audio stream karte waqt FFmpeg mein hota hai.
+# Bass ko 10dB boost kiya gaya hai aur treble ko crystal clear banaya gaya hai.
+JBL_FFMPEG_ARGS = "-af \"bass=g=10,treble=g=3,equalizer=f=40:width_type=h:width=50:g=10\""
 
 class YouTubeAPI:
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.listbase = "https://youtube.com/playlist?list="
+        self.ydl_opts = {
+            "format": "bestaudio/best",
+            "quiet": True,
+            "no_warnings": True,
+            "geo_bypass": True,
+            "nocheckcertificate": True,
+            "source_address": "0.0.0.0",
+            "headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+            }
+        }
 
-    async def exists(self, link: str, videoid: Union[bool, str] = None):
-        if videoid: link = self.base + link
+    async def exists(self, link: str):
+        """Check if link is a valid YouTube URL"""
         return bool(re.search(self.regex, link))
 
     async def url(self, message: Message) -> Optional[str]:
-        """Extracts URL from message or replied message"""
+        """Extracts URL from message/reply with high accuracy"""
         messages = [message, message.reply_to_message]
         for msg in messages:
             if not msg: continue
@@ -90,33 +74,54 @@ class YouTubeAPI:
         return None
 
     async def search(self, query: str, limit: int = 1):
-        """Search videos using youtubesearchpython"""
+        """Smart Search: First tries API, then fallback to yt-dlp"""
         try:
+            # Primary Search
             search = VideosSearch(query, limit=limit)
             resp = await search.next()
-            return resp.get("result", [])
+            if resp.get("result"):
+                return resp.get("result")
+            
+            # Fallback Search (Agar primary fail ho jaye)
+            loop = asyncio.get_event_loop()
+            info = await loop.run_in_executor(
+                None, 
+                lambda: yt_dlp.YoutubeDL(self.ydl_opts).extract_info(f"ytsearch{limit}:{query}", download=False)
+            )
+            if 'entries' in info:
+                return [{
+                    "title": x["title"],
+                    "duration": x.get("duration_string", "05:00"),
+                    "thumbnails": [{"url": x["thumbnail"]}],
+                    "id": x["id"],
+                    "link": f"https://www.youtube.com/watch?v={x['id']}"
+                } for x in info['entries']]
         except Exception as e:
             LOGGER.error(f"Search Error: {e}")
-            return []
+        return []
 
-    async def details(self, link: str, videoid: Union[bool, str] = None):
-        if videoid: link = self.base + link
+    async def details(self, query: str, videoid: Union[bool, str] = None):
+        """Fetches video details with error handling"""
         try:
-            # Check if it's a direct URL or a search query
-            if not await self.exists(link):
-                res = await self.search(link, limit=1)
-            else:
-                link = link.split("&")[0]
+            if videoid or await self.exists(query):
+                link = self.base + query if videoid else query.split("&")[0]
                 results = VideosSearch(link, limit=1)
                 res_data = await results.next()
                 res = res_data.get("result", [])
+            else:
+                res = await self.search(query, limit=1)
 
             if not res: return None
             video = res[0]
+            
+            title = video.get("title", "Unknown Title")
+            duration = video.get("duration", "05:00")
+            if not duration or duration == "None": duration = "05:00"
+            
             return (
-                video["title"],
-                video.get("duration", "00:00"),
-                int(time_to_seconds(video.get("duration", "00:00"))),
+                title,
+                duration,
+                int(time_to_seconds(duration)),
                 video["thumbnails"][0]["url"].split("?")[0],
                 video["id"]
             )
@@ -125,6 +130,7 @@ class YouTubeAPI:
             return None
 
     async def track(self, query: str, videoid: Union[bool, str] = None):
+        """Main track extractor for the music player"""
         det = await self.details(query, videoid)
         if not det: return None, None
         track_details = {
@@ -144,25 +150,26 @@ class YouTubeAPI:
         videoid: Union[bool, str] = None,
         **kwargs
     ) -> Tuple[Optional[str], bool]:
-        """Returns streamable URL. Fixes GroupcallInvalid by ensuring a valid link."""
+        """Downloads/Extracts streamable URL with JBL sound compatibility"""
         if videoid: link = self.base + link
         m_type = "video" if video else "audio"
         
-        # 1. Pehle API se try karein (Fastest)
-        stream_link = await get_direct_stream_link(link, m_type)
-        if stream_link:
-            return stream_link, True
-        
-        # 2. Fallback: yt-dlp (Strongest) - Isse GroupcallInvalid solve ho jayega
+        # 1. High Speed API Try
         try:
-            ydl_opts = {
-                "format": "bestaudio/best" if not video else "bestvideo+bestaudio/best",
-                "quiet": True,
-                "no_warnings": True,
-                "geo_bypass": True,
-                "nocheckcertificate": True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(f"{API_URL}/download", params={"url": link, "type": m_type}) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        token = data.get("download_token")
+                        if token:
+                            return f"{API_URL}/stream/{link}?type={m_type}&token={token}", True
+        except:
+            pass
+        
+        # 2. Reliable Fallback (yt-dlp) - solve GroupcallInvalid issues
+        try:
+            with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, link, download=False)
                 if 'url' in info:
                     return info['url'], True
