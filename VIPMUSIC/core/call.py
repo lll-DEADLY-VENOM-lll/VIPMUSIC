@@ -1,12 +1,11 @@
 #
-# Copyright (C) 2024 by THE-VIP-BOY-OP@Github, < https://github.com/THE-VIP-BOY-OP >.
+# Copyright (C) 2021-2022 by KIRU-OP@Github, < https://github.com/KIRU-OP >.
 #
-# This file is part of < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC > project,
+# This file is part of < https://github.com/KIRU-OP/VIPMUSIC > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/THE-VIP-BOY-OP/VIP-MUSIC/blob/master/LICENSE >
+# Please see < https://github.com/KIRU-OP/VIPMUSIC/blob/master/LICENSE >
 #
 # All rights reserved.
-#
 import asyncio
 import os
 from datetime import datetime, timedelta
