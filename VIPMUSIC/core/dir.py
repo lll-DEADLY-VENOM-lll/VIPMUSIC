@@ -1,11 +1,11 @@
-# Copyright (C) 2024 by VISHAL-PANDEY@Github, < https://github.com/vishalpandeynkp1 >.
 #
-# This file is part of < https://github.com/vishalpandeynkp1/VIPNOBITAMUSIC_REPO > project,
+# Copyright (C) 2021-2022 by KIRU-OP@Github, < https://github.com/KIRU-OP >.
+#
+# This file is part of < https://github.com/KIRU-OP/VIPMUSIC > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/vishalpandeynkp1/VIPNOBITAMUSIC_REPO/blob/master/LICENSE >
+# Please see < https://github.com/KIRU-OP/VIPMUSIC/blob/master/LICENSE >
 #
 # All rights reserved.
-#
 import logging
 import os
 import sys
